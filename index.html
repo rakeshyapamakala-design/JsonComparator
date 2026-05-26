@@ -1,0 +1,1750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reltio Configuration Comparator</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f0f2f5;
+            color: #1a1a2e;
+            min-height: 100vh;
+        }
+
+        /* ── Header ── */
+        .header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: white;
+            padding: 22px 32px;
+            box-shadow: 0 3px 12px rgba(0,0,0,0.25);
+        }
+        .header h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.3px; }
+        .header p  { margin-top: 5px; opacity: 0.65; font-size: 0.83rem; }
+
+        /* ── Container ── */
+        .container { max-width: 1500px; margin: 0 auto; padding: 28px 24px; }
+
+        /* ── Error ── */
+        .error-msg {
+            background: #fde8e8; border: 1px solid #e74c3c; color: #b94040;
+            padding: 10px 16px; border-radius: 7px; margin-bottom: 18px;
+            font-size: 0.85rem;
+        }
+
+        /* ── Input grid ── */
+        .input-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 18px;
+        }
+        .config-panel {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .panel-head {
+            background: #f7f8fa;
+            border-bottom: 1px solid #e4e7ec;
+            padding: 10px 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .panel-label {
+            font-weight: 700;
+            font-size: 0.82rem;
+            color: #0f3460;
+            white-space: nowrap;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .tenant-name-input {
+            flex: 1;
+            border: 1px solid #d4d9e2;
+            border-radius: 5px;
+            padding: 4px 9px;
+            font-size: 0.84rem;
+            color: #333;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .tenant-name-input:focus { border-color: #0f3460; }
+        .config-textarea {
+            width: 100%;
+            height: 260px;
+            border: none;
+            padding: 12px 14px;
+            font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+            font-size: 0.76rem;
+            resize: vertical;
+            outline: none;
+            color: #1a1a2e;
+            background: #fafbfc;
+            line-height: 1.5;
+        }
+
+        /* ── Controls ── */
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 9px 22px;
+            border: none;
+            border-radius: 7px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 600;
+            transition: all 0.18s;
+            letter-spacing: 0.1px;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #0f3460, #533483);
+            color: white;
+            box-shadow: 0 2px 8px rgba(15,52,96,0.35);
+        }
+        .btn-primary:hover { opacity: 0.88; transform: translateY(-1px); }
+        .btn-secondary {
+            background: white;
+            color: #444;
+            border: 1px solid #d0d5dd;
+        }
+        .btn-secondary:hover { background: #f5f7fa; }
+        .btn-export { color: #0f7461; border-color: #0f7461; }
+        .btn-export:hover { background: #f0faf8; }
+
+        .toggle-wrap {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.84rem;
+            color: #555;
+            cursor: pointer;
+            user-select: none;
+        }
+        .toggle-wrap input[type=checkbox] { cursor: pointer; accent-color: #0f3460; }
+
+        .divider { flex: 1; }
+
+        /* ── Ignored fields notice ── */
+        .ignored-notice {
+            background: #fffbea;
+            border: 1px solid #f0c040;
+            border-radius: 8px;
+            padding: 10px 16px;
+            margin-bottom: 20px;
+            font-size: 0.8rem;
+            color: #7a6000;
+        }
+        .ignored-notice summary {
+            cursor: pointer; font-weight: 600;
+            display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+            user-select: none;
+        }
+        .ignored-notice summary .ig-title { flex: 1; min-width: 0; }
+        .ignored-header-btns {
+            display: inline-flex; gap: 6px; align-items: center;
+        }
+        .btn-ig {
+            border: none; border-radius: 5px; padding: 3px 10px;
+            font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: background 0.15s, opacity 0.15s;
+            white-space: nowrap;
+        }
+        .btn-ig-reset   { background: #e8e0c0; color: #5a4a00; }
+        .btn-ig-reset:hover { background: #d8d0a0; }
+        .btn-ig-refresh { background: #0f3460; color: #fff; }
+        .btn-ig-refresh:hover { background: #1a4a80; }
+
+        .ignored-tags { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 5px; }
+        .ig-section-label {
+            width: 100%; margin: 8px 0 3px;
+            font-size: 0.7rem; color: #9a7800; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .ig-section-label:first-child { margin-top: 2px; }
+        .ignored-tag {
+            background: #f5e8a0; border-radius: 4px; padding: 2px 6px 2px 8px;
+            font-family: monospace; font-size: 0.75rem; color: #5a4a00;
+            display: inline-flex; align-items: center; gap: 4px;
+        }
+        .tag-rm {
+            background: none; border: none; cursor: pointer;
+            color: #9a7800; font-size: 0.9rem; line-height: 1;
+            padding: 0; opacity: 0.55; transition: opacity 0.15s, color 0.15s;
+        }
+        .tag-rm:hover { opacity: 1; color: #c0392b; }
+
+        /* Add-rule row */
+        .ignored-add-row {
+            display: flex; align-items: center; gap: 7px;
+            margin-top: 10px; padding-top: 9px;
+            border-top: 1px dashed #e0c840; flex-wrap: wrap;
+        }
+        .ig-add-label {
+            font-size: 0.72rem; font-weight: 700; color: #9a7800;
+            text-transform: uppercase; letter-spacing: 0.4px; white-space: nowrap;
+        }
+        .ig-add-input {
+            flex: 1; min-width: 180px;
+            border: 1px solid #d4c060; border-radius: 5px;
+            padding: 4px 9px; font-size: 0.8rem; font-family: monospace;
+            background: #fffdf0; color: #3a2e00; outline: none;
+        }
+        .ig-add-input:focus { border-color: #9a7800; box-shadow: 0 0 0 2px rgba(154,120,0,0.15); }
+        .ig-type-select {
+            border: 1px solid #d4c060; border-radius: 5px;
+            padding: 4px 8px; font-size: 0.78rem; background: #fffdf0;
+            color: #3a2e00; outline: none; cursor: pointer;
+        }
+        .btn-ig-add {
+            background: #f0c040; color: #3a2e00; border: none;
+            border-radius: 5px; padding: 4px 12px; font-size: 0.78rem;
+            font-weight: 700; cursor: pointer; white-space: nowrap;
+        }
+        .btn-ig-add:hover { background: #e0b020; }
+
+        /* ── Stats ── */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 14px;
+            margin-bottom: 22px;
+        }
+        .stat-card {
+            background: white;
+            border-radius: 9px;
+            padding: 14px 16px;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.07);
+            text-align: center;
+            border-top: 3px solid transparent;
+        }
+        .stat-val   { font-size: 2rem; font-weight: 800; line-height: 1; }
+        .stat-lbl   { font-size: 0.72rem; color: #888; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .s-diff  { border-color: #e74c3c; } .s-diff  .stat-val { color: #e74c3c; }
+        .s-same  { border-color: #27ae60; } .s-same  .stat-val { color: #27ae60; }
+        .s-only1 { border-color: #e67e22; } .s-only1 .stat-val { color: #e67e22; }
+        .s-only2 { border-color: #2980b9; } .s-only2 .stat-val { color: #2980b9; }
+        .s-skip  { border-color: #bbb;    } .s-skip  .stat-val { color: #aaa;    }
+
+        /* ── Results panel ── */
+        .results-panel {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+            overflow: hidden;
+        }
+        .results-head {
+            padding: 12px 16px;
+            background: #f7f8fa;
+            border-bottom: 1px solid #e4e7ec;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .results-title { font-weight: 700; font-size: 0.9rem; color: #1a1a2e; }
+        .filter-group { display: flex; gap: 8px; align-items: center; }
+        .filter-select, .filter-search {
+            padding: 6px 10px;
+            border: 1px solid #d0d5dd;
+            border-radius: 6px;
+            font-size: 0.82rem;
+            outline: none;
+            color: #333;
+            transition: border-color 0.2s;
+        }
+        .filter-select:focus, .filter-search:focus { border-color: #0f3460; }
+        .filter-search { width: 230px; }
+
+        /* ── Table ── */
+        .table-scroll { overflow-x: auto; max-height: 65vh; overflow-y: auto; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+        thead th {
+            background: #1a1a2e;
+            color: #cdd5e0;
+            padding: 11px 13px;
+            text-align: left;
+            position: sticky;
+            top: 0;
+            font-weight: 600;
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            white-space: nowrap;
+            z-index: 2;
+        }
+        tbody tr { border-bottom: 1px solid #f0f2f5; }
+        tbody tr:hover { background: #f5f7ff !important; }
+
+        td {
+            padding: 7px 13px;
+            vertical-align: middle;
+            word-break: break-word;
+        }
+
+        .td-path {
+            font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+            font-size: 0.76rem;
+            color: #1a1a2e;
+            min-width: 260px;
+            max-width: 400px;
+            line-height: 1.4;
+        }
+        .td-val {
+            font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+            font-size: 0.78rem;
+            min-width: 160px;
+            max-width: 420px;
+            line-height: 1.4;
+        }
+        .td-status { white-space: nowrap; }
+
+        /* Row highlights */
+        .r-diff   { background: #fff5f5; }
+        .r-only1  { background: #fff9f0; }
+        .r-only2  { background: #f0f7ff; }
+        .r-same   { background: #fafafa; }
+        .r-ignore { background: #fafafa; opacity: 0.6; }
+
+        /* Value decorations */
+        .val-missing { color: #bbb; font-style: italic; }
+        .val-null    { color: #aaa; font-style: italic; }
+        .val-bool    { color: #0f3460; font-weight: 700; }
+        .val-num     { color: #0a7461; }
+        .val-diff1   { background: #ffd7d7; padding: 1px 4px; border-radius: 3px; }
+        .val-diff2   { background: #cde8ff; padding: 1px 4px; border-radius: 3px; }
+
+        /* Badges */
+        .badge {
+            display: inline-block; padding: 2px 8px;
+            border-radius: 10px; font-size: 0.69rem; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.4px;
+        }
+        .b-diff   { background: #fde8e8; color: #c0392b; }
+        .b-only1  { background: #fef0e0; color: #c0620b; }
+        .b-only2  { background: #ddeeff; color: #1565c0; }
+        .b-same   { background: #e0f7ea; color: #1a7a3a; }
+        .b-ignore { background: #f0f0f0; color: #999; }
+
+        .empty-state {
+            text-align: center; padding: 60px 20px;
+            color: #bbb; font-size: 0.9rem;
+        }
+        .empty-icon { font-size: 2.5rem; margin-bottom: 10px; }
+
+        /* ── Group headers ── */
+        .group-header { cursor: pointer; user-select: none; }
+        .group-header:hover td { background: #e8ecf8 !important; }
+        .group-header td {
+            background: #edf0f8;
+            border-top: 2px solid #d0d6ee;
+            padding: 8px 13px !important;
+        }
+        .group-header-inner { display: flex; align-items: center; gap: 10px; }
+        .group-chevron {
+            font-size: 0.72rem; display: inline-block;
+            transition: transform 0.18s; color: #555; width: 12px; flex-shrink: 0;
+        }
+        .group-header[data-expanded="true"]  .group-chevron { transform: rotate(90deg); }
+        .group-header[data-expanded="false"] .group-chevron { transform: rotate(0deg); }
+        .group-name {
+            font-family: 'SF Mono','Monaco','Menlo',monospace;
+            font-size: 0.83rem; font-weight: 700; color: #1a1a2e;
+        }
+        .group-badges { display: flex; gap: 4px; flex-wrap: wrap; }
+        .gbadge {
+            padding: 1px 7px; border-radius: 8px;
+            font-size: 0.67rem; font-weight: 700; letter-spacing: 0.3px;
+        }
+        .gb-diff  { background: #fde8e8; color: #c0392b; }
+        .gb-only1 { background: #fef0e0; color: #c0620b; }
+        .gb-only2 { background: #ddeeff; color: #1565c0; }
+        .gb-same  { background: #e0f7ea; color: #1a7a3a; }
+        .gb-ign   { background: #f0f0f0; color: #999; }
+        .group-total { margin-left: auto; font-size: 0.72rem; color: #999; white-space: nowrap; }
+        .group-row .td-path { padding-left: 32px !important; }
+        .path-grp { color: #bbb; }
+        .path-sub { color: #1a1a2e; }
+
+        /* ── L2 sub-group headers ── */
+        .group-l2-header { cursor: pointer; user-select: none; }
+        .group-l2-header:hover td { background: #f0f4ff !important; }
+        .group-l2-header td {
+            background: #f5f7fc;
+            border-top: 1px solid #e4e7ed;
+            padding: 6px 13px 6px 30px !important;
+        }
+        .group-l2-header-inner { display: flex; align-items: center; gap: 8px; }
+        .group-l2-chevron {
+            font-size: 0.63rem; display: inline-block;
+            transition: transform 0.18s; color: #778; width: 10px; flex-shrink: 0;
+        }
+        .group-l2-header[data-expanded="true"]  .group-l2-chevron { transform: rotate(90deg); }
+        .group-l2-header[data-expanded="false"] .group-l2-chevron { transform: rotate(0deg); }
+        .group-l2-name {
+            font-family: 'SF Mono','Monaco','Menlo',monospace;
+            font-size: 0.78rem; font-weight: 600; color: #334466;
+        }
+        .group-l2-row .td-path { padding-left: 52px !important; }
+        .results-title-group { display: flex; align-items: baseline; gap: 10px; }
+        .results-subtitle { font-size: 0.78rem; color: #888; }
+        .btn-grp-toggle {
+            border: 1px solid #d0d5dd; background: white; border-radius: 5px;
+            padding: 5px 11px; font-size: 0.76rem; cursor: pointer; color: #444;
+            transition: background 0.15s;
+        }
+        .btn-grp-toggle:hover { background: #f0f2f5; color: #0f3460; border-color: #0f3460; }
+
+        /* ── ER Diagram Modal ── */
+        .modal-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(10,10,30,0.65); z-index: 1000;
+            align-items: center; justify-content: center;
+        }
+        .modal-overlay.open { display: flex; }
+        .modal {
+            background: white; border-radius: 14px;
+            width: 94vw; height: 90vh;
+            display: flex; flex-direction: column;
+            box-shadow: 0 24px 80px rgba(0,0,0,0.35);
+            overflow: hidden; animation: modal-in .18s ease;
+        }
+        @keyframes modal-in {
+            from { opacity: 0; transform: scale(0.96); }
+            to   { opacity: 1; transform: scale(1); }
+        }
+        .modal-head {
+            background: linear-gradient(135deg, #1a1a2e, #0f3460);
+            color: white; padding: 13px 20px;
+            display: flex; align-items: center; gap: 14px; flex-shrink: 0;
+        }
+        .modal-title { font-size: 1rem; font-weight: 700; flex: 1; }
+        .modal-src-group {
+            display: flex; gap: 4px; background: rgba(255,255,255,0.12);
+            border-radius: 20px; padding: 3px;
+        }
+        .modal-src-btn {
+            border: none; background: transparent; color: rgba(255,255,255,0.7);
+            padding: 4px 14px; border-radius: 16px; cursor: pointer;
+            font-size: 0.8rem; font-weight: 600; transition: all .15s;
+        }
+        .modal-src-btn.active {
+            background: white; color: #0f3460;
+        }
+        .modal-close-btn {
+            background: rgba(255,255,255,0.15); border: none; color: white;
+            width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
+            font-size: 1rem; display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0; transition: background .15s;
+        }
+        .modal-close-btn:hover { background: rgba(255,255,255,0.3); }
+        .er-canvas {
+            flex: 1; overflow: hidden; position: relative;
+            background: radial-gradient(ellipse at center, #f8faff 0%, #eef1f8 100%);
+        }
+        .er-canvas svg { display: block; }
+        .er-footer {
+            padding: 8px 18px; background: #f7f8fa;
+            border-top: 1px solid #e4e7ec; font-size: 0.76rem; color: #94a3b8;
+            display: flex; align-items: center; gap: 16px; flex-shrink: 0;
+        }
+        .er-legend { display: flex; gap: 16px; flex-wrap: wrap; }
+        .er-legend-item {
+            display: flex; align-items: center; gap: 5px;
+            font-size: 0.75rem; color: #475569;
+        }
+        .er-legend-dot {
+            width: 12px; height: 12px; border-radius: 3px;
+        }
+        .btn-er { color: #7c3aed; border-color: #7c3aed; }
+        .btn-er:hover { background: #f5f0ff; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>Reltio Configuration Comparator</h1>
+    <p>Paste two tenant configurations below. Tenant-specific fields, credentials, keys, secrets, names, and infrastructure endpoints are automatically excluded.</p>
+</div>
+
+<div class="container">
+
+    <div id="err-box"></div>
+
+    <!-- JSON input panels -->
+    <div class="input-grid">
+        <div class="config-panel">
+            <div class="panel-head">
+                <span class="panel-label">Config 1</span>
+                <input class="tenant-name-input" id="name1" placeholder="Label (e.g. Prod)">
+            </div>
+            <textarea class="config-textarea" id="cfg1" placeholder="Paste first tenant's configuration JSON here…"></textarea>
+        </div>
+        <div class="config-panel">
+            <div class="panel-head">
+                <span class="panel-label">Config 2</span>
+                <input class="tenant-name-input" id="name2" placeholder="Label (e.g. QA)">
+            </div>
+            <textarea class="config-textarea" id="cfg2" placeholder="Paste second tenant's configuration JSON here…"></textarea>
+        </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls">
+        <button class="btn btn-primary" onclick="runCompare()">&#9654;&#xFE0E; Compare</button>
+        <button class="btn btn-secondary" onclick="clearAll()">Clear</button>
+        <button class="btn btn-secondary btn-export" onclick="exportCSV()">Export CSV</button>
+        <button class="btn btn-secondary btn-er" onclick="openERModal()">&#9671; ER Diagram</button>
+        <label class="toggle-wrap">
+            <input type="checkbox" id="showSame" onchange="applyFilter()"> Show matching fields
+        </label>
+        <label class="toggle-wrap">
+            <input type="checkbox" id="showIgnored" onchange="applyFilter()"> Show ignored fields
+        </label>
+    </div>
+
+    <!-- Ignored fields disclosure -->
+    <details class="ignored-notice" id="ignored-panel">
+        <summary>
+            <span class="ig-title">&#9888; Ignored fields &mdash; <span id="ignored-rule-count"></span></span>
+            <span class="ignored-header-btns" onclick="event.stopPropagation()">
+                <button class="btn-ig btn-ig-reset" onclick="resetIgnoredToDefaults()">&#8635; Reset to defaults</button>
+            </span>
+        </summary>
+        <div class="ignored-tags" id="ignored-tags-list"></div>
+        <div class="ignored-add-row">
+            <span class="ig-add-label">Add rule:</span>
+            <select class="ig-type-select" id="newRuleType">
+                <option value="prefix">Path prefix</option>
+                <option value="field">Field name contains</option>
+                <option value="segment">Any segment contains</option>
+            </select>
+            <input class="ig-add-input" id="newRuleValue"
+                   placeholder="e.g. customConfig.apiToken"
+                   onkeydown="if(event.key==='Enter') addIgnoredRule()">
+            <button class="btn-ig-add" onclick="addIgnoredRule()">+ Add</button>
+        </div>
+    </details>
+
+    <!-- Stats -->
+    <div id="stats-box"></div>
+
+    <!-- Results -->
+    <div id="results-box">
+        <div class="results-panel">
+            <div class="empty-state">
+                <div class="empty-icon">&#9878;</div>
+                Paste two configurations and click <strong>Compare</strong> to see differences.
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- ── ER Diagram Modal ────────────────────────────────────────────── -->
+<div id="er-modal" class="modal-overlay" onclick="erModalBgClick(event)">
+    <div class="modal">
+        <div class="modal-head">
+            <span class="modal-title">&#9711; ER Diagram &mdash; Entity &amp; Relation Types</span>
+            <div class="modal-src-group">
+                <button class="modal-src-btn active" id="er-src-1" onclick="switchERSource(1)">Config 1</button>
+                <button class="modal-src-btn"        id="er-src-2" onclick="switchERSource(2)">Config 2</button>
+            </div>
+            <button class="modal-close-btn" onclick="closeERModal()">&#10005;</button>
+        </div>
+        <div class="er-canvas" id="er-canvas"></div>
+        <div class="er-footer">
+            <span>&#x1F4A1; Drag nodes &bull; Scroll to zoom &bull; Drag background to pan</span>
+            <span id="er-stats" style="margin-left:auto;font-weight:600;color:#475569;"></span>
+            <div class="er-legend" id="er-legend"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+'use strict';
+
+// ────────────────────────────────────────────────────────────────────────────
+// Fields to ignore — tenant-specific, credentials, infrastructure pointers
+// ────────────────────────────────────────────────────────────────────────────
+const IGNORED_PREFIXES = [
+    // Core tenant identity
+    'tenantId',
+    'tenantName',
+    'customerName',
+    'defaultTenant',
+    // Audit / versioning
+    'createdTime',
+    'timestamp',
+    'version',
+    'createdBy',
+    'updatedBy',
+    // S3 / analytics credentials and tenant-specific paths
+    'analyticsConfig.authData',
+    'analyticsConfig.updatesConfig.systemBucket',
+    'analyticsConfig.updatesConfig.updatesDirectory',
+    // Spanner DB (tenant-specific service accounts & DB IDs)
+    'dataStorageConfig.dataStorages',
+    // BigTable (project/instance/table are infra-specific)
+    'dataStorageConfig.historyBigTableConfig.project',
+    'dataStorageConfig.historyBigTableConfig.instanceId',
+    'dataStorageConfig.historyBigTableConfig.tableName',
+    // Elasticsearch cluster (env-specific)
+    'searchStorageConfiguration.esClusterName',
+    'searchStorageConfiguration.esHosts',
+    // RDM endpoints & tenant IDs
+    'rdmConfig.serviceUri',
+    'rdmConfig.oauthInstance',
+    'rdmConfig.rdmTenants',
+    // Optional parameters – provisioning metadata
+    'optionalParameters.provisionedBy',
+    'optionalParameters.dataloaderConfig.udlCloud',
+    'optionalParameters.dataloaderConfig.sourceType',
+    // Data loader cloud refs
+    'dataLoaderConfig.udlCloud',
+    'dataLoaderConfig.sourceType',
+    // Streaming / messaging destinations are env-specific (provider, host, topic, etc.)
+    'streamingConfig.messaging.destinations',
+    'streamingConfig.messaging.sources',
+];
+
+// Pattern-based ignore — applied to the LAST FIELD SEGMENT of any path.
+// Catches credentials, keys, secrets, names, ARNs, and infra identifiers.
+const IGNORED_FIELD_PATTERNS = [
+    // Exact / suffix matches
+    { re: /^key$/i,            label: 'key  (exact "key")' },
+    { re: /^secret[s]?$/i,     label: 'secret / secrets  (exact)' },
+    { re: /^token[s]?$/i,      label: 'token / tokens  (exact)' },
+    { re: /name$/i,            label: '…name  (ends with "name": messagingName, clusterName…)' },
+    { re: /arn$/i,             label: '…Arn  (ends with "Arn": awsRoleArn, instanceProfileArn…)' },
+    { re: /role$/i,            label: '…role  (ends with "role": awsRole, iamRole…)' },
+    // Contains matches
+    { re: /secret/i,           label: '…secret…  (contains "secret")' },
+    { re: /password/i,         label: '…password…  (contains "password")' },
+    { re: /passwd/i,           label: '…passwd…  (contains "passwd")' },
+    { re: /credential/i,       label: '…credential…  (contains "credential")' },
+    { re: /bucket/i,           label: '…bucket…  (contains "bucket": stagingBucket…)' },
+    { re: /tenantid/i,         label: '…tenantId…  (contains "tenantId")' },
+    { re: /apikey/i,           label: '…apiKey…  (contains "apiKey")' },
+    { re: /api_key/i,          label: '…api_key…  (contains "api_key")' },
+    { re: /accesskey/i,        label: '…accessKey…  (contains "accessKey")' },
+    { re: /privatekey/i,       label: '…privateKey…  (contains "privateKey")' },
+    { re: /publickey/i,        label: '…publicKey…  (contains "publicKey")' },
+    { re: /serviceaccount/i,   label: '…serviceAccount…  (contains "serviceAccount")' },
+    { re: /accountname/i,      label: '…accountName…  (contains "accountName")' },
+    { re: /username/i,         label: '…userName…  (contains "userName")' },
+    { re: /clientsecret/i,     label: '…clientSecret…  (contains "clientSecret")' },
+    { re: /clientid/i,         label: '…clientId…  (contains "clientId")' },
+];
+
+// Any-segment patterns — checked against EVERY segment in the path.
+// If a parent field name is sensitive, all its children are automatically ignored.
+// e.g. "awsCredentials" in ...awsConfig.awsCredentials.awsRole → entire subtree ignored.
+const ANY_SEGMENT_PATTERNS = [
+    { re: /credential/i,     label: 'any segment: …credential… → entire subtree ignored' },
+    { re: /kmsCustomerKey/i, label: 'any segment: …kmsCustomerKey… → entire subtree ignored' },
+];
+
+// ── Mutable working copies (edited live by the user via the Ignored Fields UI) ──
+var activePrefixes      = IGNORED_PREFIXES.slice();
+var activeFieldPatterns = IGNORED_FIELD_PATTERNS.slice();
+var activeAnySegment    = ANY_SEGMENT_PATTERNS.slice();
+
+// Extract the last non-numeric segment from a flattened path
+// e.g. "analyticsConfig.authData.s3.key" → "key"
+//      "cleanse[0].cleanseFunction"       → "cleanseFunction"
+function lastSegment(path) {
+    const parts = path.replace(/\[(\d+)\]/g, '').split('.');
+    for (var i = parts.length - 1; i >= 0; i--) {
+        if (parts[i]) return parts[i];
+    }
+    return path;
+}
+
+function shouldIgnore(path) {
+    // 1. Prefix/exact path match (uses live activePrefixes)
+    if (activePrefixes.some(function(p) {
+        return path === p || path.startsWith(p + '.') || path.startsWith(p + '[');
+    })) return true;
+    // 2. Any-segment check (uses live activeAnySegment)
+    const allSegs = path.replace(/\[(\d+)\]/g, '').split('.').filter(Boolean);
+    if (allSegs.some(function(seg) {
+        return activeAnySegment.some(function(p) { return p.re.test(seg); });
+    })) return true;
+    // 3. Last-segment pattern match (uses live activeFieldPatterns)
+    const seg = lastSegment(path);
+    return activeFieldPatterns.some(function(p) { return p.re.test(seg); });
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Flatten JSON to { "dot.path[idx].key" : value }
+// ────────────────────────────────────────────────────────────────────────────
+function flatten(obj, prefix) {
+    const out = {};
+    prefix = prefix || '';
+
+    if (obj === null || obj === undefined) {
+        out[prefix] = obj;
+        return out;
+    }
+
+    if (Array.isArray(obj)) {
+        if (obj.length === 0) {
+            out[prefix] = '[]';
+            return out;
+        }
+        // Primitive arrays → JSON string for clean comparison
+        if (obj.every(x => x === null || typeof x !== 'object')) {
+            out[prefix] = JSON.stringify(obj);
+            return out;
+        }
+        obj.forEach(function(item, i) {
+            const key = prefix + '[' + i + ']';
+            if (item !== null && typeof item === 'object') {
+                Object.assign(out, flatten(item, key));
+            } else {
+                out[key] = item;
+            }
+        });
+        return out;
+    }
+
+    if (typeof obj === 'object') {
+        const keys = Object.keys(obj);
+        if (keys.length === 0) {
+            out[prefix] = '{}';
+            return out;
+        }
+        keys.forEach(function(k) {
+            const newKey = prefix ? prefix + '.' + k : k;
+            const val = obj[k];
+            if (val !== null && typeof val === 'object') {
+                Object.assign(out, flatten(val, newKey));
+            } else {
+                out[newKey] = val;
+            }
+        });
+        return out;
+    }
+
+    out[prefix] = obj;
+    return out;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Core comparison
+// ────────────────────────────────────────────────────────────────────────────
+var lastRows = [];
+
+function runCompare() {
+    clearError();
+
+    const raw1 = document.getElementById('cfg1').value.trim();
+    const raw2 = document.getElementById('cfg2').value.trim();
+
+    if (!raw1 || !raw2) { showError('Please paste both JSON configurations.'); return; }
+
+    var obj1, obj2;
+    try { obj1 = JSON.parse(raw1); } catch(e) { showError('Config 1 JSON parse error: ' + e.message); return; }
+    try { obj2 = JSON.parse(raw2); } catch(e) { showError('Config 2 JSON parse error: ' + e.message); return; }
+
+    const flat1 = flatten(obj1, '');
+    const flat2 = flatten(obj2, '');
+
+    const allPaths = Array.from(new Set(Object.keys(flat1).concat(Object.keys(flat2)))).sort();
+
+    var diffCount = 0, sameCount = 0, only1 = 0, only2 = 0, ignoredCount = 0;
+    var rows = [];
+
+    allPaths.forEach(function(path) {
+        const ignored = shouldIgnore(path);
+        if (ignored) ignoredCount++;
+
+        const has1 = Object.prototype.hasOwnProperty.call(flat1, path);
+        const has2 = Object.prototype.hasOwnProperty.call(flat2, path);
+        const v1   = flat1[path];
+        const v2   = flat2[path];
+
+        var status;
+        if (ignored) {
+            status = 'ignore';
+        } else if (has1 && has2) {
+            if (String(v1) === String(v2)) { sameCount++; status = 'same'; }
+            else                           { diffCount++;  status = 'diff'; }
+        } else if (has1) { only1++; status = 'only1'; }
+        else             { only2++; status = 'only2'; }
+
+        // Always collect every row — applyFilter() handles show/hide via checkboxes
+        rows.push({ path: path, v1: v1, v2: v2, has1: has1, has2: has2, status: status });
+    });
+
+    lastRows = rows;
+
+    const n1 = document.getElementById('name1').value || 'Config 1';
+    const n2 = document.getElementById('name2').value || 'Config 2';
+
+    renderStats(diffCount, sameCount, only1, only2, ignoredCount, n1, n2);
+    renderTable(rows, n1, n2);
+    // Default the filter to "Different" on every fresh compare so the most
+    // relevant rows are shown immediately. Falls back to "All" if no diffs exist.
+    var filterEl = document.getElementById('statusFilter');
+    if (filterEl) filterEl.value = (diffCount > 0 || only1 > 0 || only2 > 0) ? 'diff' : '';
+    applyFilter();
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Render helpers
+// ────────────────────────────────────────────────────────────────────────────
+function esc(s) {
+    return String(s)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function fmtValue(val, hasIt, isDiff, side) {
+    if (!hasIt)           return '<span class="val-missing">— not present —</span>';
+    if (val === null)     return '<span class="val-null">null</span>';
+    if (val === undefined)return '<span class="val-null">undefined</span>';
+    if (typeof val === 'boolean') return '<span class="val-bool">' + val + '</span>';
+    if (typeof val === 'number')  {
+        const s = esc(String(val));
+        return isDiff ? '<span class="val-num ' + (side===1?'val-diff1':'val-diff2') + '">' + s + '</span>'
+                      : '<span class="val-num">' + s + '</span>';
+    }
+    const s = esc(String(val));
+    return isDiff ? '<span class="' + (side===1?'val-diff1':'val-diff2') + '">' + s + '</span>' : s;
+}
+
+function badge(status) {
+    const map = { diff:'b-diff', only1:'b-only1', only2:'b-only2', same:'b-same', ignore:'b-ignore' };
+    const txt = { diff:'DIFF',  only1:'ONLY 1',  only2:'ONLY 2',  same:'SAME',  ignore:'IGNORED' };
+    return '<span class="badge ' + map[status] + '">' + txt[status] + '</span>';
+}
+
+function rowClass(status) {
+    return { diff:'r-diff', only1:'r-only1', only2:'r-only2', same:'r-same', ignore:'r-ignore' }[status] || '';
+}
+
+function renderStats(diff, same, o1, o2, ignored, n1, n2) {
+    document.getElementById('stats-box').innerHTML =
+        '<div class="stats">' +
+        statCard(diff,    'Different values', 's-diff') +
+        statCard(same,    'Matching fields',  's-same') +
+        statCard(o1,      'Only in ' + esc(n1), 's-only1') +
+        statCard(o2,      'Only in ' + esc(n2), 's-only2') +
+        statCard(ignored, 'Fields skipped',   's-skip') +
+        '</div>';
+}
+
+function statCard(n, lbl, cls) {
+    return '<div class="stat-card ' + cls + '"><div class="stat-val">' + n +
+           '</div><div class="stat-lbl">' + lbl + '</div></div>';
+}
+
+// ── 2-level grouping helpers ──────────────────────────────────────────────────
+
+// Returns {l1, l2} group keys for a flattened path.
+// l1 = root segment + its array index  (e.g. 'entityTypes[0]')
+// l2 = l1 + '.' + second segment name  (e.g. 'entityTypes[0].attributes')
+//      or null when path has ≤ 2 named segments.
+// Keeping the root-level index separates e.g. Organization from Individual.
+function getGroupKeys(path) {
+    // Parse into segments, each carrying its own name + optional [N] index
+    var segs = [];
+    var i = 0;
+    while (i < path.length) {
+        if (path[i] === '.') { i++; continue; }
+        var start = i;
+        while (i < path.length && path[i] !== '.' && path[i] !== '[') i++;
+        var name = path.slice(start, i);
+        var idx = '';
+        if (i < path.length && path[i] === '[') {
+            var ib = i++;
+            while (i < path.length && path[i] !== ']') i++;
+            if (i < path.length) i++;
+            idx = path.slice(ib, i);
+        }
+        if (name) segs.push({ name: name, idx: idx });
+    }
+    if (segs.length === 0) return { l1: path, l2: null };
+    // L1 preserves the root index: 'entityTypes[0]'
+    var l1 = segs[0].name + segs[0].idx;
+    if (segs.length <= 2) return { l1: l1, l2: null };
+    // L2 appends only the second segment's NAME (no second index):
+    //   'entityTypes[0].attributes'  (not 'entityTypes[0].attributes[2]')
+    var l2 = l1 + '.' + segs[1].name;
+    return { l1: l1, l2: l2 };
+}
+
+// Character index in `path` immediately after the Nth named (non-index) segment.
+// Array indices [N] are transparent and do not count toward n.
+// e.g. posAfterSemSegs('entityTypes[0].attributes[1].label', 2) → 25
+function posAfterSemSegs(path, n) {
+    var count = 0, i = 0;
+    while (i < path.length) {
+        var ch = path[i];
+        if (ch === '[') {
+            i++;
+            while (i < path.length && path[i] !== ']') i++;
+            if (i < path.length) i++;
+        } else if (ch === '.') {
+            i++;
+        } else {
+            var end = i;
+            while (end < path.length && path[end] !== '.' && path[end] !== '[') end++;
+            count++;
+            if (count === n) return end;
+            i = end;
+        }
+    }
+    return path.length;
+}
+
+function countStatuses(rows) {
+    var c = { diff: 0, only1: 0, only2: 0, same: 0, ignore: 0 };
+    rows.forEach(function(r) { c[r.status]++; });
+    return c;
+}
+
+function makeBadgesHTML(cnt, n1, n2) {
+    var h = '';
+    if (cnt.diff)   h += '<span class="gbadge gb-diff">'  + cnt.diff  + ' diff</span>';
+    if (cnt.only1)  h += '<span class="gbadge gb-only1">' + cnt.only1 + ' only ' + esc(n1) + '</span>';
+    if (cnt.only2)  h += '<span class="gbadge gb-only2">' + cnt.only2 + ' only ' + esc(n2) + '</span>';
+    if (cnt.same)   h += '<span class="gbadge gb-same">'  + cnt.same  + ' same</span>';
+    if (cnt.ignore) h += '<span class="gbadge gb-ign">'   + cnt.ignore + ' ign</span>';
+    return h;
+}
+
+function grpPriority(cnt) {
+    if (cnt.diff)                  return 0;
+    if (cnt.only1 || cnt.only2)    return 1;
+    if (cnt.same)                  return 2;
+    return 3;
+}
+
+// Build a single <tr> for a data row. The L1/L2 key is a literal prefix of the
+// path, so we can simply split there: prefix → gray, remainder → black.
+function renderDataRow(r, l1, l2) {
+    var isDiff = r.status === 'diff';
+    var prefix = (l2 !== null) ? l2 : l1;
+    var pre, suf;
+    if (r.path.length > prefix.length && r.path.startsWith(prefix)) {
+        pre = prefix;
+        suf = r.path.slice(prefix.length);   // e.g. '[1].label' or '.uri'
+    } else {
+        pre = '';
+        suf = r.path;
+    }
+    var pathHTML = pre
+        ? '<span class="path-grp">' + esc(pre) + '</span><span class="path-sub">' + esc(suf) + '</span>'
+        : '<span class="path-sub">' + esc(suf) + '</span>';
+    return '<tr class="group-row ' + rowClass(r.status) + (l2 !== null ? ' group-l2-row' : '') + '"' +
+           ' data-group-l1="' + esc(l1) + '"' +
+           (l2 !== null ? ' data-group-l2="' + esc(l2) + '"' : '') +
+           ' data-path="' + esc(r.path) + '"' +
+           ' data-status="' + r.status + '">' +
+           '<td class="td-path" title="' + esc(r.path) + '">' + pathHTML + '</td>' +
+           '<td class="td-val">' + fmtValue(r.v1, r.has1, isDiff, 1) + '</td>' +
+           '<td class="td-val">' + fmtValue(r.v2, r.has2, isDiff, 2) + '</td>' +
+           '<td class="td-status">' + badge(r.status) + '</td>' +
+           '</tr>';
+}
+
+// Legacy alias — kept in case anything external references it.
+function pathToGroup(path) {
+    return getGroupKeys(path).l1;
+}
+
+function renderTable(rows, n1, n2) {
+    var box = document.getElementById('results-box');
+
+    if (rows.length === 0) {
+        box.innerHTML = '<div class="results-panel"><div class="empty-state">' +
+            '<div class="empty-icon">&#10003;</div>' +
+            'No differences found — the two configurations are identical (excluding ignored fields).' +
+            '</div></div>';
+        return;
+    }
+
+    // ── Label lookup: l1Key → friendly display name (from .label / .name fields) ─
+    // Enables showing "Organization" instead of "entityTypes[0]" in L1 headers.
+    var l1Labels = Object.create(null);
+    rows.forEach(function(r) {
+        var keys = getGroupKeys(r.path);
+        if (keys.l2 === null && keys.l1.length > 0) {
+            var leaf = r.path.slice(keys.l1.length);
+            if (leaf === '.label' || leaf === '.name') {
+                var val = (r.has1 && r.v1 != null) ? r.v1 : (r.has2 && r.v2 != null) ? r.v2 : null;
+                if (val && typeof val === 'string' && !l1Labels[keys.l1]) {
+                    l1Labels[keys.l1] = val;
+                }
+            }
+        }
+    });
+
+    // ── Build 2-level group structure ──────────────────────────────────────────
+    // l1Groups[l1] = { directRows: [], l2subs: { l2: [rows] }, l2Order: [] }
+    var l1Groups = Object.create(null);
+    var l1Order  = [];
+
+    rows.forEach(function(r) {
+        var keys = getGroupKeys(r.path);
+        var l1 = keys.l1, l2 = keys.l2;
+        if (!l1Groups[l1]) {
+            l1Groups[l1] = { directRows: [], l2subs: Object.create(null), l2Order: [] };
+            l1Order.push(l1);
+        }
+        if (l2 === null) {
+            l1Groups[l1].directRows.push(r);
+        } else {
+            if (!l1Groups[l1].l2subs[l2]) {
+                l1Groups[l1].l2subs[l2] = [];
+                l1Groups[l1].l2Order.push(l2);
+            }
+            l1Groups[l1].l2subs[l2].push(r);
+        }
+    });
+
+    function allRowsForL1(l1) {
+        var g = l1Groups[l1], out = g.directRows.slice();
+        g.l2Order.forEach(function(l2) { out = out.concat(g.l2subs[l2]); });
+        return out;
+    }
+
+    // Sort L1 groups: diff first, then only1/only2, then same, then all-ignored
+    l1Order.sort(function(a, b) {
+        var pa = grpPriority(countStatuses(allRowsForL1(a)));
+        var pb = grpPriority(countStatuses(allRowsForL1(b)));
+        return pa - pb || a.localeCompare(b);
+    });
+
+    var totalFields = rows.filter(function(r) { return r.status !== 'ignore'; }).length;
+    var bodyHTML = '';
+
+    l1Order.forEach(function(l1) {
+        var g       = l1Groups[l1];
+        var allRows = allRowsForL1(l1);
+        var l1Cnt   = countStatuses(allRows);
+        var l1HasIssues = l1Cnt.diff > 0 || l1Cnt.only1 > 0 || l1Cnt.only2 > 0;
+        var l1Expanded  = l1HasIssues;
+        var visFields   = allRows.filter(function(r) { return r.status !== 'ignore'; }).length;
+
+        // ── L1 group header ────────────────────────────────────────────────────
+        var l1DisplayName = l1Labels[l1] || l1;
+        bodyHTML +=
+            '<tr class="group-header" data-group-l1="' + esc(l1) + '"' +
+            ' data-expanded="' + (l1Expanded ? 'true' : 'false') + '">' +
+            '<td colspan="4" class="group-header-cell">' +
+              '<div class="group-header-inner">' +
+                '<span class="group-chevron">&#9654;</span>' +
+                '<span class="group-name" title="' + esc(l1) + '">' + esc(l1DisplayName) + '</span>' +
+                '<span class="group-badges">' + makeBadgesHTML(l1Cnt, n1, n2) + '</span>' +
+                '<span class="group-total">' + visFields + ' field' + (visFields !== 1 ? 's' : '') + '</span>' +
+              '</div>' +
+            '</td></tr>';
+
+        // ── L1 direct rows (shallow paths with ≤ 2 semantic segments) ─────────
+        g.directRows.forEach(function(r) {
+            bodyHTML += renderDataRow(r, l1, null);
+        });
+
+        // ── L2 sub-groups ─────────────────────────────────────────────────────
+        // Sort L2 by same priority scheme
+        g.l2Order.sort(function(a, b) {
+            var pa = grpPriority(countStatuses(g.l2subs[a]));
+            var pb = grpPriority(countStatuses(g.l2subs[b]));
+            return pa - pb || a.localeCompare(b);
+        });
+
+        g.l2Order.forEach(function(l2) {
+            var l2rows      = g.l2subs[l2];
+            var l2Cnt       = countStatuses(l2rows);
+            var l2HasIssues = l2Cnt.diff > 0 || l2Cnt.only1 > 0 || l2Cnt.only2 > 0;
+            var l2Expanded  = l1Expanded && l2HasIssues;
+            // Display just the sub-segment name (e.g. "attributes" from "entityTypes.attributes")
+            var l2ShortName = l2.split('.').slice(1).join('.');
+            var l2VisFields = l2rows.filter(function(r) { return r.status !== 'ignore'; }).length;
+
+            // L2 sub-group header
+            bodyHTML +=
+                '<tr class="group-l2-header"' +
+                ' data-group-l1="' + esc(l1) + '"' +
+                ' data-group-l2="' + esc(l2) + '"' +
+                ' data-expanded="' + (l2Expanded ? 'true' : 'false') + '">' +
+                '<td colspan="4">' +
+                  '<div class="group-l2-header-inner">' +
+                    '<span class="group-l2-chevron">&#9654;</span>' +
+                    '<span class="group-l2-name">' + esc(l2ShortName) + '</span>' +
+                    '<span class="group-badges">' + makeBadgesHTML(l2Cnt, n1, n2) + '</span>' +
+                    '<span class="group-total">' + l2VisFields + ' field' + (l2VisFields !== 1 ? 's' : '') + '</span>' +
+                  '</div>' +
+                '</td></tr>';
+
+            // L2 data rows
+            l2rows.forEach(function(r) {
+                bodyHTML += renderDataRow(r, l1, l2);
+            });
+        });
+    });
+
+    box.innerHTML =
+        '<div class="results-panel">' +
+          '<div class="results-head">' +
+            '<div class="results-title-group">' +
+              '<span class="results-title">Comparison Results</span>' +
+              '<span class="results-subtitle">' + l1Order.length + ' groups &middot; ' + totalFields + ' fields</span>' +
+            '</div>' +
+            '<div class="filter-group">' +
+              '<button class="btn-grp-toggle" id="btnExpandAll">&#9660; Expand all</button>' +
+              '<button class="btn-grp-toggle" id="btnCollapseAll">&#9654; Collapse all</button>' +
+              '<select class="filter-select" id="statusFilter" onchange="applyFilter()">' +
+                '<option value="">All statuses</option>' +
+                '<option value="diff">Different</option>' +
+                '<option value="only1">Only in ' + esc(n1) + '</option>' +
+                '<option value="only2">Only in ' + esc(n2) + '</option>' +
+                '<option value="same">Same</option>' +
+                '<option value="ignore">Ignored</option>' +
+              '</select>' +
+              '<input class="filter-search" id="pathSearch" placeholder="&#128269; Search parameters&hellip;" oninput="applyFilter()">' +
+            '</div>' +
+          '</div>' +
+          '<div class="table-scroll">' +
+            '<table id="cmpTable">' +
+              '<thead><tr>' +
+                '<th>Parameter</th>' +
+                '<th>' + esc(n1) + '</th>' +
+                '<th>' + esc(n2) + '</th>' +
+                '<th>Status</th>' +
+              '</tr></thead>' +
+              '<tbody>' + bodyHTML + '</tbody>' +
+            '</table>' +
+          '</div>' +
+        '</div>';
+    // Expand/Collapse all handled via delegation on #results-box (see DOMContentLoaded)
+}
+
+function setAllGroups(expand) {
+    // Clear the status filter so every group becomes visible before expanding/collapsing.
+    var sf = document.getElementById('statusFilter');
+    if (sf) sf.value = '';
+    // Target both L1 group headers and L2 sub-group headers
+    document.querySelectorAll('#cmpTable .group-header, #cmpTable .group-l2-header').forEach(function(h) {
+        h.setAttribute('data-expanded', expand ? 'true' : 'false');
+    });
+    applyFilter();
+}
+
+function applyFilter() {
+    var tbl = document.getElementById('cmpTable');
+    if (!tbl) return;
+
+    var q           = (document.getElementById('pathSearch').value || '').toLowerCase();
+    var statusSel   = document.getElementById('statusFilter').value;
+    var showSame    = document.getElementById('showSame').checked;
+    var showIgnored = document.getElementById('showIgnored').checked;
+    var searching   = q.length > 0 || statusSel !== '';
+
+    // Build header lookup maps
+    var l1HdrMap = Object.create(null);   // l1 key → tr.group-header
+    var l2HdrMap = Object.create(null);   // l2 key → tr.group-l2-header
+    tbl.querySelectorAll('.group-header').forEach(function(h) {
+        l1HdrMap[h.getAttribute('data-group-l1')] = h;
+    });
+    tbl.querySelectorAll('.group-l2-header').forEach(function(h) {
+        l2HdrMap[h.getAttribute('data-group-l2')] = h;
+    });
+
+    // ── Pass 1: which groups have rows that PASS the filter (ignoring collapse) ─
+    // This determines whether a group header should be visible at all.
+    var l1PassFilter = Object.create(null);
+    var l2PassFilter = Object.create(null);
+    tbl.querySelectorAll('.group-row').forEach(function(row) {
+        var s  = row.dataset.status;
+        var l1 = row.getAttribute('data-group-l1');
+        var l2 = row.getAttribute('data-group-l2');
+        var pass = true;
+        if (s === 'same'   && !showSame    && statusSel !== 'same')   pass = false;
+        if (s === 'ignore' && !showIgnored && statusSel !== 'ignore') pass = false;
+        if (pass && statusSel && s !== statusSel) pass = false;
+        if (pass && q && !row.dataset.path.toLowerCase().includes(q)) pass = false;
+        if (pass) {
+            l1PassFilter[l1] = true;
+            if (l2) l2PassFilter[l2] = true;
+        }
+    });
+
+    // ── Pass 2: set each data row's visibility (filter + collapse state) ────────
+    tbl.querySelectorAll('.group-row').forEach(function(row) {
+        var s  = row.dataset.status;
+        var l1 = row.getAttribute('data-group-l1');
+        var l2 = row.getAttribute('data-group-l2');
+
+        // Checkbox / status / search filter
+        var pass = true;
+        if (s === 'same'   && !showSame    && statusSel !== 'same')   pass = false;
+        if (s === 'ignore' && !showIgnored && statusSel !== 'ignore') pass = false;
+        if (pass && statusSel && s !== statusSel) pass = false;
+        if (pass && q && !row.dataset.path.toLowerCase().includes(q)) pass = false;
+
+        if (!pass) { row.style.display = 'none'; return; }
+
+        // Respect collapse state when not actively filtering
+        if (!searching) {
+            var l1Hdr = l1HdrMap[l1];
+            if (l1Hdr && l1Hdr.getAttribute('data-expanded') === 'false') {
+                row.style.display = 'none'; return;
+            }
+            if (l2) {
+                var l2Hdr = l2HdrMap[l2];
+                if (l2Hdr && l2Hdr.getAttribute('data-expanded') === 'false') {
+                    row.style.display = 'none'; return;
+                }
+            }
+        }
+        row.style.display = '';
+    });
+
+    // ── L2 sub-group headers: visible if any rows pass filter AND L1 is open ────
+    tbl.querySelectorAll('.group-l2-header').forEach(function(hdr) {
+        var l2 = hdr.getAttribute('data-group-l2');
+        var l1 = hdr.getAttribute('data-group-l1');
+
+        if (!l2PassFilter[l2]) { hdr.style.display = 'none'; return; }
+
+        // Hide if parent L1 is collapsed
+        var l1Hdr = l1HdrMap[l1];
+        if (!searching && l1Hdr && l1Hdr.getAttribute('data-expanded') === 'false') {
+            hdr.style.display = 'none'; return;
+        }
+
+        hdr.style.display = '';
+        l1PassFilter[l1] = true;   // L2 header visible → L1 must also be visible
+        if (searching) hdr.setAttribute('data-expanded', 'true');
+    });
+
+    // ── L1 group headers: visible if any rows (or L2 headers) pass filter ───────
+    tbl.querySelectorAll('.group-header').forEach(function(hdr) {
+        var l1 = hdr.getAttribute('data-group-l1');
+        hdr.style.display = l1PassFilter[l1] ? '' : 'none';
+        if (searching && l1PassFilter[l1]) hdr.setAttribute('data-expanded', 'true');
+    });
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Export
+// ────────────────────────────────────────────────────────────────────────────
+function exportCSV() {
+    const tbl = document.getElementById('cmpTable');
+    if (!tbl) { showError('Nothing to export — run a comparison first.'); return; }
+
+    const n1 = esc(document.getElementById('name1').value || 'Config 1');
+    const n2 = esc(document.getElementById('name2').value || 'Config 2');
+
+    const lines = ['"Parameter","' + n1 + '","' + n2 + '","Status"'];
+    tbl.querySelectorAll('tbody tr').forEach(function(row) {
+        if (row.style.display === 'none') return;
+        const cells = row.querySelectorAll('td');
+        if (cells.length < 4) return;  // skip group/L2 headers (they use colspan=4, so 1 cell)
+        const cols = [cells[0].textContent, cells[1].textContent, cells[2].textContent, cells[3].textContent];
+        lines.push(cols.map(function(c){ return '"' + c.replace(/"/g,'""') + '"'; }).join(','));
+    });
+
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = 'reltio-config-diff.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Utilities
+// ────────────────────────────────────────────────────────────────────────────
+function clearAll() {
+    document.getElementById('cfg1').value = '';
+    document.getElementById('cfg2').value = '';
+    document.getElementById('stats-box').innerHTML   = '';
+    document.getElementById('results-box').innerHTML =
+        '<div class="results-panel"><div class="empty-state">' +
+        '<div class="empty-icon">&#9878;</div>' +
+        'Paste two configurations and click <strong>Compare</strong> to see differences.' +
+        '</div></div>';
+    clearError();
+}
+
+function showError(msg) {
+    document.getElementById('err-box').innerHTML = '<div class="error-msg">&#9888; ' + esc(msg) + '</div>';
+}
+function clearError() {
+    document.getElementById('err-box').innerHTML = '';
+}
+
+// ── Editable ignored-fields UI ────────────────────────────────────────────────
+
+function makeTag(label, type, idx) {
+    // Use data-attributes instead of inline onclick — innerHTML-injected onclick
+    // strings are blocked in many browser/serving contexts.
+    return '<span class="ignored-tag">' +
+               esc(label) +
+               '<button class="tag-rm" data-type="' + type + '" data-idx="' + idx +
+               '" title="Remove this rule">&times;</button>' +
+           '</span>';
+}
+
+function renderIgnoredTags() {
+    var el = document.getElementById('ignored-tags-list');
+    if (!el) return;
+
+    var prefixHTML = activePrefixes.length
+        ? activePrefixes.map(function(p, i) { return makeTag(p, 'prefix', i); }).join('')
+        : '<em style="font-size:0.78rem;color:#baa030">— none —</em>';
+
+    var fieldHTML = activeFieldPatterns.length
+        ? activeFieldPatterns.map(function(p, i) { return makeTag(p.label, 'field', i); }).join('')
+        : '<em style="font-size:0.78rem;color:#baa030">— none —</em>';
+
+    var anyHTML = activeAnySegment.length
+        ? activeAnySegment.map(function(p, i) { return makeTag(p.label, 'segment', i); }).join('')
+        : '<em style="font-size:0.78rem;color:#baa030">— none —</em>';
+
+    el.innerHTML =
+        '<div class="ig-section-label">Path prefixes</div>' + prefixHTML +
+        '<div class="ig-section-label">Field name patterns (last segment)</div>' + fieldHTML +
+        '<div class="ig-section-label">Any-segment patterns (subtree)</div>' + anyHTML;
+
+    // Update rule count in summary
+    var cnt = activePrefixes.length + activeFieldPatterns.length + activeAnySegment.length;
+    var countEl = document.getElementById('ignored-rule-count');
+    if (countEl) countEl.textContent = cnt + ' rule' + (cnt !== 1 ? 's' : '');
+}
+
+// Single delegated listener on the stable #ignored-panel container.
+// Handles all × button clicks regardless of innerHTML re-renders.
+document.addEventListener('DOMContentLoaded', function() {
+    // Ignored-fields tag removal
+    document.getElementById('ignored-panel').addEventListener('click', function(e) {
+        var btn = e.target.closest('.tag-rm');
+        if (!btn) return;
+        var type = btn.getAttribute('data-type');
+        var idx  = parseInt(btn.getAttribute('data-idx'), 10);
+        if (type === 'prefix')  activePrefixes.splice(idx, 1);
+        if (type === 'field')   activeFieldPatterns.splice(idx, 1);
+        if (type === 'segment') activeAnySegment.splice(idx, 1);
+        renderIgnoredTags();
+        autoRefresh(true);
+    });
+
+    // Group controls — all handled via a single delegation listener on #results-box
+    document.getElementById('results-box').addEventListener('click', function(e) {
+        // Expand all / Collapse all buttons
+        if (e.target.closest('#btnExpandAll'))   { setAllGroups(true);  return; }
+        if (e.target.closest('#btnCollapseAll')) { setAllGroups(false); return; }
+        // L2 sub-group header toggle — check before L1 (more specific selector)
+        var l2Hdr = e.target.closest('.group-l2-header');
+        if (l2Hdr) {
+            l2Hdr.setAttribute('data-expanded',
+                l2Hdr.getAttribute('data-expanded') === 'true' ? 'false' : 'true');
+            applyFilter();
+            return;
+        }
+        // L1 group header toggle
+        var hdr = e.target.closest('.group-header');
+        if (!hdr) return;
+        hdr.setAttribute('data-expanded',
+            hdr.getAttribute('data-expanded') === 'true' ? 'false' : 'true');
+        applyFilter();
+    });
+});
+
+// Re-run the comparison if both configs are already loaded.
+// forceShowSame: forces "Show matching fields" on so a newly-unignored field
+// that happens to be identical in both configs is still visible.
+function autoRefresh(forceShowSame) {
+    var raw1 = document.getElementById('cfg1').value.trim();
+    var raw2 = document.getElementById('cfg2').value.trim();
+    if (!raw1 || !raw2) return;
+    if (forceShowSame) document.getElementById('showSame').checked = true;
+    runCompare();
+}
+
+function addIgnoredRule() {
+    var val  = (document.getElementById('newRuleValue').value || '').trim();
+    var type = document.getElementById('newRuleType').value;
+    if (!val) return;
+
+    if (type === 'prefix') {
+        if (activePrefixes.indexOf(val) === -1) activePrefixes.push(val);
+    } else if (type === 'field') {
+        var lbl = '…' + val + '…  (field name contains "' + val + '")';
+        activeFieldPatterns.push({ re: new RegExp(val.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), label: lbl });
+    } else if (type === 'segment') {
+        var lbl2 = 'any segment: …' + val + '… → entire subtree ignored';
+        activeAnySegment.push({ re: new RegExp(val.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), label: lbl2 });
+    }
+
+    document.getElementById('newRuleValue').value = '';
+    renderIgnoredTags();
+    autoRefresh(false);
+}
+
+function resetIgnoredToDefaults() {
+    activePrefixes      = IGNORED_PREFIXES.slice();
+    activeFieldPatterns = IGNORED_FIELD_PATTERNS.slice();
+    activeAnySegment    = ANY_SEGMENT_PATTERNS.slice();
+    renderIgnoredTags();
+    autoRefresh(false);
+}
+
+// Initial render (runs immediately — DOMContentLoaded not needed for this)
+renderIgnoredTags();
+
+// Auto-populate Config label from tenantId when JSON is pasted
+(function() {
+    function tryAutoLabel(textareaId, nameInputId) {
+        var ta = document.getElementById(textareaId);
+        var ni = document.getElementById(nameInputId);
+        ta.addEventListener('input', function() {
+            var raw = ta.value.trim();
+            if (!raw) return;
+            // Only auto-fill when label is empty or was previously auto-filled
+            if (ni.value && !ni.dataset.autoFilled) return;
+            try {
+                var obj = JSON.parse(raw);
+                // Check common Reltio tenant identifier fields
+                var label = obj.tenantId || obj.tenantName || obj.defaultTenant
+                          || obj.tenant  || obj.id        || '';
+                if (label) {
+                    ni.value = String(label);
+                    ni.dataset.autoFilled = '1';
+                }
+            } catch(e) { /* not fully valid JSON yet — wait for more input */ }
+        });
+        // If user manually edits the label, stop auto-filling
+        ni.addEventListener('input', function() {
+            delete ni.dataset.autoFilled;
+        });
+    }
+    tryAutoLabel('cfg1', 'name1');
+    tryAutoLabel('cfg2', 'name2');
+})();
+
+// ─── ER Diagram ────────────────────────────────────────────────────────────────
+
+var erCurrentSrc = 1;
+
+function openERModal() {
+    erCurrentSrc = 1;
+    document.getElementById('er-src-1').classList.add('active');
+    document.getElementById('er-src-2').classList.remove('active');
+    document.getElementById('er-modal').classList.add('open');
+    document.body.style.overflow = 'hidden';
+    renderERFromConfig(1);
+}
+
+function closeERModal() {
+    document.getElementById('er-modal').classList.remove('open');
+    document.body.style.overflow = '';
+}
+
+function erModalBgClick(e) {
+    if (e.target === document.getElementById('er-modal')) closeERModal();
+}
+
+function switchERSource(num) {
+    erCurrentSrc = num;
+    document.getElementById('er-src-1').classList.toggle('active', num === 1);
+    document.getElementById('er-src-2').classList.toggle('active', num === 2);
+    renderERFromConfig(num);
+}
+
+function renderERFromConfig(num) {
+    var raw = (document.getElementById('cfg' + num).value || '').trim();
+    if (!raw) {
+        erShowEmpty('Config ' + num + ' is empty — paste a configuration first.');
+        return;
+    }
+    var obj;
+    try { obj = JSON.parse(raw); }
+    catch(e) { erShowEmpty('Config ' + num + ' JSON error: ' + e.message); return; }
+
+    var data = buildERData(obj);
+    if (data.nodes.length === 0) {
+        erShowEmpty(
+            'No entityTypes or relationTypes found in Config ' + num + '.<br>' +
+            'This view requires a <strong>business configuration</strong> that includes ' +
+            '<code>entityTypes</code> and <code>relationTypes</code> arrays.'
+        );
+        return;
+    }
+
+    document.getElementById('er-stats').textContent =
+        data.nodes.length + ' entity type' + (data.nodes.length !== 1 ? 's' : '') +
+        '  ·  ' + data.links.length + ' relation type' + (data.links.length !== 1 ? 's' : '');
+
+    renderER(data.nodes, data.links);
+}
+
+function erShowEmpty(html) {
+    document.getElementById('er-canvas').innerHTML =
+        '<div style="display:flex;align-items:center;justify-content:center;height:100%;' +
+        'flex-direction:column;gap:14px;color:#94a3b8;padding:40px;">' +
+        '<div style="font-size:3rem;">&#9671;</div>' +
+        '<div style="font-size:0.88rem;text-align:center;max-width:440px;line-height:1.6;">' + html + '</div>' +
+        '</div>';
+    document.getElementById('er-stats').textContent = '';
+    document.getElementById('er-legend').innerHTML = '';
+}
+
+// ── Extract nodes & links from a Reltio business config ──────────────────────
+function buildERData(obj) {
+    var nodes = [], links = [], nodeMap = {};
+
+    function addNode(uri, label) {
+        if (!nodeMap[uri]) {
+            var n = { id: uri, label: label || uri.split('/').pop() || uri };
+            nodes.push(n);
+            nodeMap[uri] = n;
+        }
+        return nodeMap[uri];
+    }
+
+    var entityTypes = obj.entityTypes || obj['entity-types'] || [];
+    (Array.isArray(entityTypes) ? entityTypes : []).forEach(function(et) {
+        var uri = et.uri || et.id || et.label;
+        if (uri) addNode(uri, et.label || uri.split('/').pop());
+    });
+
+    var relTypes = obj.relationTypes || obj['relation-types'] || [];
+    (Array.isArray(relTypes) ? relTypes : []).forEach(function(rt) {
+        var label = rt.label || (rt.uri || '').split('/').pop() || 'relates';
+        // Support Reltio business config (startObject.objectTypeURI / endObject.objectTypeURI)
+        // as well as older formats (startEntityType.uri / startEntityType.id)
+        var startUri = (rt.startObject && rt.startObject.objectTypeURI) ||
+                       (rt.startEntityType && (rt.startEntityType.uri || rt.startEntityType.id || String(rt.startEntityType)));
+        var endUri   = (rt.endObject && rt.endObject.objectTypeURI) ||
+                       (rt.endEntityType && (rt.endEntityType.uri || rt.endEntityType.id || String(rt.endEntityType)));
+        if (startUri && endUri) {
+            addNode(String(startUri), null);
+            addNode(String(endUri),   null);
+            links.push({
+                source: String(startUri),
+                target: String(endUri),
+                label:  label,
+                uid:    (rt.uri || label) + Math.random()
+            });
+        }
+    });
+
+    return { nodes: nodes, links: links };
+}
+
+// ── D3 force-directed ER diagram ─────────────────────────────────────────────
+var PALETTE = [
+    '#4361ee','#7209b7','#f72585','#4cc9f0','#3a86ff',
+    '#06d6a0','#fb5607','#e63946','#118ab2','#8338ec',
+    '#2dc653','#ff9f1c','#e9c46a','#264653','#e76f51'
+];
+var NODE_W = 140, NODE_H = 44;
+
+function rectEdge(sx, sy, tx, ty) {
+    var dx = tx - sx, dy = ty - sy;
+    var len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 1) return { x1: sx, y1: sy, x2: tx, y2: ty };
+    var ux = dx / len, uy = dy / len;
+    var hw = NODE_W / 2, hh = NODE_H / 2;
+    var ts = Math.min(
+        ux !== 0 ? hw / Math.abs(ux) : Infinity,
+        uy !== 0 ? hh / Math.abs(uy) : Infinity
+    );
+    var tt = Math.min(
+        ux !== 0 ? hw / Math.abs(ux) : Infinity,
+        uy !== 0 ? hh / Math.abs(uy) : Infinity
+    );
+    return {
+        x1: sx + ux * ts,
+        y1: sy + uy * ts,
+        x2: tx - ux * (tt + 3),
+        y2: ty - uy * (tt + 3)
+    };
+}
+
+function renderER(nodes, links) {
+    var canvas = document.getElementById('er-canvas');
+    canvas.innerHTML = '';
+    var W = canvas.clientWidth  || 900;
+    var H = canvas.clientHeight || 500;
+
+    // Build color map
+    var colorMap = {};
+    nodes.forEach(function(n, i) { colorMap[n.id] = PALETTE[i % PALETTE.length]; });
+
+    // Legend
+    var legendEl = document.getElementById('er-legend');
+    legendEl.innerHTML = nodes.map(function(n) {
+        return '<span class="er-legend-item">' +
+               '<span class="er-legend-dot" style="background:' + colorMap[n.id] + '"></span>' +
+               esc(n.label) + '</span>';
+    }).join('');
+
+    var svg = d3.select('#er-canvas').append('svg')
+        .attr('width', W).attr('height', H);
+
+    // Defs
+    var defs = svg.append('defs');
+
+    // Arrowhead
+    defs.append('marker')
+        .attr('id', 'er-arr')
+        .attr('viewBox', '0 -5 10 10')
+        .attr('refX', 8).attr('refY', 0)
+        .attr('markerWidth', 6).attr('markerHeight', 6)
+        .attr('orient', 'auto')
+      .append('path')
+        .attr('d', 'M0,-5L10,0L0,5')
+        .attr('fill', '#94a3b8');
+
+    // Drop shadow
+    var flt = defs.append('filter').attr('id', 'er-shadow')
+        .attr('x', '-30%').attr('y', '-30%')
+        .attr('width', '160%').attr('height', '160%');
+    flt.append('feDropShadow')
+        .attr('dx', 0).attr('dy', 3)
+        .attr('stdDeviation', 4)
+        .attr('flood-color', 'rgba(0,0,0,0.14)');
+
+    // Zoom / pan
+    var mainG = svg.append('g');
+    var zoom = d3.zoom().scaleExtent([0.08, 6])
+        .on('zoom', function(event) { mainG.attr('transform', event.transform); });
+    svg.call(zoom).on('dblclick.zoom', null);
+
+    // Force simulation
+    var sim = d3.forceSimulation(nodes)
+        .force('link',    d3.forceLink(links).id(function(d) { return d.id; }).distance(240).strength(0.4))
+        .force('charge',  d3.forceManyBody().strength(-700))
+        .force('center',  d3.forceCenter(W / 2, H / 2))
+        .force('collide', d3.forceCollide(100))
+        .force('x',       d3.forceX(W / 2).strength(0.04))
+        .force('y',       d3.forceY(H / 2).strength(0.04));
+
+    // ── Draw links ──
+    var linkG = mainG.append('g');
+
+    var linkLine = linkG.selectAll('line').data(links).join('line')
+        .attr('stroke', '#cbd5e1')
+        .attr('stroke-width', 1.8)
+        .attr('marker-end', 'url(#er-arr)');
+
+    // Link label — white outline via paint-order trick
+    var linkLbl = linkG.selectAll('text').data(links).join('text')
+        .attr('text-anchor', 'middle')
+        .attr('dominant-baseline', 'middle')
+        .attr('font-size', 10)
+        .attr('font-weight', '600')
+        .attr('fill', '#64748b')
+        .style('paint-order', 'stroke')
+        .attr('stroke', 'rgba(248,250,252,0.92)')
+        .attr('stroke-width', 4)
+        .text(function(d) { return d.label; });
+
+    // ── Draw nodes ──
+    var nodeG = mainG.append('g').selectAll('g').data(nodes).join('g')
+        .attr('cursor', 'grab')
+        .call(d3.drag()
+            .on('start', function(event, d) {
+                if (!event.active) sim.alphaTarget(0.3).restart();
+                d.fx = d.x; d.fy = d.y;
+                d3.select(this).attr('cursor', 'grabbing');
+            })
+            .on('drag', function(event, d) { d.fx = event.x; d.fy = event.y; })
+            .on('end', function(event, d) {
+                if (!event.active) sim.alphaTarget(0);
+                d.fx = null; d.fy = null;
+                d3.select(this).attr('cursor', 'grab');
+            })
+        );
+
+    // Node shadow rect (slightly larger, blurred)
+    nodeG.append('rect')
+        .attr('width', NODE_W).attr('height', NODE_H)
+        .attr('x', -NODE_W / 2).attr('y', -NODE_H / 2)
+        .attr('rx', 9)
+        .attr('fill', function(d) { return colorMap[d.id]; })
+        .attr('filter', 'url(#er-shadow)');
+
+    // Node header strip
+    nodeG.append('rect')
+        .attr('width', NODE_W).attr('height', 7)
+        .attr('x', -NODE_W / 2).attr('y', -NODE_H / 2)
+        .attr('rx', 9)
+        .attr('fill', 'rgba(255,255,255,0.25)');
+
+    // Node label
+    nodeG.append('text')
+        .attr('text-anchor', 'middle')
+        .attr('dominant-baseline', 'middle')
+        .attr('fill', 'white')
+        .attr('font-size', 12)
+        .attr('font-weight', '700')
+        .attr('pointer-events', 'none')
+        .attr('letter-spacing', '0.2px')
+        .text(function(d) { return d.label; });
+
+    // Tooltip on hover
+    nodeG.append('title').text(function(d) { return d.id; });
+
+    // ── Tick ──
+    sim.on('tick', function() {
+        linkLine.each(function(d) {
+            var sx = d.source.x, sy = d.source.y;
+            var tx = d.target.x, ty = d.target.y;
+            // Self-loop
+            if (d.source === d.target || sx === tx && sy === ty) {
+                d3.select(this).attr('x1', sx).attr('y1', sy - NODE_H/2)
+                               .attr('x2', sx + NODE_W/2).attr('y2', sy);
+                return;
+            }
+            var e = rectEdge(sx, sy, tx, ty);
+            d3.select(this)
+                .attr('x1', e.x1).attr('y1', e.y1)
+                .attr('x2', e.x2).attr('y2', e.y2);
+        });
+
+        linkLbl
+            .attr('x', function(d) { return (d.source.x + d.target.x) / 2; })
+            .attr('y', function(d) { return (d.source.y + d.target.y) / 2 - 8; });
+
+        nodeG.attr('transform', function(d) {
+            return 'translate(' + d.x + ',' + d.y + ')';
+        });
+    });
+
+    // Auto-fit once simulation cools
+    sim.on('end', function() {
+        var b = mainG.node().getBBox();
+        if (!b.width || !b.height) return;
+        var pad = 40;
+        var scale = Math.min(0.9, Math.min((W - pad*2) / b.width, (H - pad*2) / b.height));
+        var tx = (W - b.width * scale) / 2 - b.x * scale;
+        var ty = (H - b.height * scale) / 2 - b.y * scale;
+        svg.transition().duration(600)
+           .call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+    });
+}
+</script>
+</body>
+</html>
